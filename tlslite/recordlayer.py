@@ -1294,3 +1294,105 @@ class RecordLayer(object):
         else:
             self._pendingWriteState = serverPendingState
             self._pendingReadState = clientPendingState
+
+    def calcTLS1_3KeyUpdate_sender(self, session):
+        prf_name, prf_length = ('sha384', 48) if sesssion.cipherSuite \
+                                in CipherSuite.sha384PrfSuites \
+                                else ('sha256', 32)
+        key_length, iv_length, cipher_func = \
+            self._getCipherSettings(session.cipherSuite)
+        iv_length = 12
+
+        if self.client:
+            # sender == "server"
+            ## Calculate N+1 secret
+            new_sr_app_secret = HKDF_expand_label(session.sr_app_secret,
+                                                  b"traffic upd", b"",
+                                                  prf_length)
+            session.sr_app_secret = new_sr_app_secret
+
+            ## Calculate keys for read-state
+            serverState = ConnectionState()
+            serverState.macContext = None
+            serverState.encContext = \
+                cipher_func(HKDF_expand_label(session.sr_app_secret,
+                                              b"key", b"",
+                                              key_length,
+                                              prf_name))
+            serverState.fixedNonce = HKDF_expand_label(session.sr_app_secret,
+                                                       b"iv", b"",
+                                                       iv_length,
+                                                       prf_name)
+            self._readState = serverState
+        else:
+            # sender == "client"
+            ## Calculate N+1 secret
+            new_cl_app_secret = HKDF_expand_label(session.cl_app_secret,
+                                                  b"traffic upd", b"",
+                                                  prf_length)
+            session.cl_app_secret = new_cl_app_secret
+
+            ## Calculate keys for read-state
+            clientState = ConnectionState()
+            clientState.macContext = None
+            clientState.encContext = \
+                cipher_func(HKDF_expand_label(session.cl_app_secret,
+                                              b"key", b"",
+                                              key_length,
+                                              prf_name))
+            clientState.fixedNonce = HKDF_expand_label(session.cl_app_secret,
+                                                       b"iv", b"",
+                                                       iv_length,
+                                                       prf_name)
+            self._readState = clientState
+
+    def calcTLS1_3KeyUpdate_reciever(self, session):
+        prf_name, prf_length = ('sha384', 48) if sesssion.cipherSuite \
+                                in CipherSuite.sha384PrfSuites \
+                                else ('sha256', 32)
+        key_length, iv_length, cipher_func = \
+            self._getCipherSettings(session.cipherSuite)
+        iv_length = 12
+
+        if self.client:
+            # reciever == "client"
+            ## Calculate N+1 secret
+            new_cl_app_secret = HKDF_expand_label(session.cl_app_secret,
+                                                  b"traffic upd", b"",
+                                                  prf_length)
+            session.cl_app_secret = new_cl_app_secret
+
+            ## Calculate keys for write-state
+            clientState = ConnectionState()
+            clientState.macContext = None
+            clientState.encContext = \
+                cipher_func(HKDF_expand_label(session.cl_app_secret,
+                                              b"key", b"",
+                                              key_length,
+                                              prf_name))
+            clientState.fixedNonce = HKDF_expand_label(session.cl_app_secret,
+                                                       b"iv", b"",
+                                                       iv_length,
+                                                       prf_name)
+            self._writeState = clientState
+        else:
+            # reciever == "server"
+            ## Calculate N+1 secret
+            new_sr_app_secret = HKDF_expand_label(session.sr_app_secret,
+                                                  b"traffic upd", b"",
+                                                  prf_length)
+            session.sr_app_secret = new_sr_app_secret
+
+            ## Calculate keys for write-state
+            serverState = ConnectionState()
+            serverState.macContext = None
+            serverState.encContext = \
+                cipher_func(HKDF_expand_label(session.sr_app_secret,
+                                              b"key", b"",
+                                              key_length,
+                                              prf_name))
+            serverState.fixedNonce = HKDF_expand_label(session.sr_app_secret,
+                                                       b"iv", b"",
+                                                       iv_length,
+                                                       prf_name)
+            self._writeState = serverState
