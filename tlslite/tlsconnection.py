@@ -654,7 +654,9 @@ class TLSConnection(TLSRecordLayer):
                                 srpParams, certParams, anonParams,
                                 serverName, nextProtos, reqTack, alpn):
         #Initialize acceptable ciphersuites
-        cipherSuites = [CipherSuite.TLS_EMPTY_RENEGOTIATION_INFO_SCSV]
+        cipherSuites = []
+        if settings.minVersion <= (3, 3):
+            cipherSuites.append(CipherSuite.TLS_EMPTY_RENEGOTIATION_INFO_SCSV)
         if srpParams:
             cipherSuites += CipherSuite.getSrpAllSuites(settings)
         elif certParams:
@@ -705,9 +707,13 @@ class TLSConnection(TLSRecordLayer):
         # In TLS1.2 advertise support for additional signature types
         if settings.maxVersion >= (3, 3):
             sigList = self._sigHashesToList(settings)
-            assert len(sigList) > 0
-            extensions.append(SignatureAlgorithmsExtension().\
-                              create(sigList))
+            if sigList:
+                extensions.append(SignatureAlgorithmsExtension().\
+                                  create(sigList))
+            else:
+                # In TLS1.3 signature_algorithms is not required if using a PSK.
+                assert settings.minVersion >= (3, 4)
+                assert (settings.pskConfigs or (session and session.tickets))
         # if we know any protocols for ALPN, advertise them
         if alpn:
             extensions.append(ALPNExtension().create(alpn))
@@ -727,7 +733,8 @@ class TLSConnection(TLSRecordLayer):
                 shares.append(key_share)
             # if TLS 1.3 is enabled, key_share must always be sent
             # (unless only static PSK is used)
-            extensions.append(ClientKeyShareExtension().create(shares))
+            if shares:
+                extensions.append(ClientKeyShareExtension().create(shares))
 
             # add info on types of PSKs supported (also used for
             # NewSessionTicket so send basically always)

@@ -409,8 +409,9 @@ class ClientHello(HelloMessage):
         cert_type = self.getExtension(ExtensionType.cert_type)
 
         if cert_type is None:
-            ext = ClientCertTypeExtension().create(val)
-            self.addExtension(ext)
+            if val != [CertificateType.x509]:
+                ext = ClientCertTypeExtension().create(val)
+                self.addExtension(ext)
         else:
             cert_type.certTypes = val
 
